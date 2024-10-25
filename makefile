@@ -1,3 +1,5 @@
+SHELL = cmd
+
 BIN = Bin
 SOURCE = Source
 TEMP = Temp
@@ -17,8 +19,8 @@ $(THREADCALLDLL) : $(SOURCE)/$(THREADCALLNAME).c
 	gcc -shared $(TEMP)/$(THREADCALLNAME).o -lpthread -o $(THREADCALLDLL)
 
 $(TESTSEXE) : $(TESTS)/$(TESTSNAME).c
-	gcc -c $(TESTS)/$(TESTSNAME).c -o $(TEMP)/$(TESTSNAME).o
-	gcc -I$(SOURCE) -L$(BIN) -lThreadCall $(TEMP)/$(TESTSNAME).o -o $(TESTSEXE)
+	gcc -c -I$(SOURCE) $(TESTS)/$(TESTSNAME).c -o $(TEMP)/$(TESTSNAME).o
+	gcc -L$(BIN) $(TEMP)/$(TESTSNAME).o -l$(THREADCALLNAME) -lpthread -o $(TESTSEXE)
 
 Clean:
 	DEL /Q $(BIN)\*.dll $(BIN)\*.exe
