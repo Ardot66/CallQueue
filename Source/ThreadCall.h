@@ -1,5 +1,5 @@
-#ifndef __THREAD_COMMUNICATOR__
-#define __THREAD_COMMUNICATOR__
+#ifndef __THREAD_CALL__
+#define __THREAD_CALL__
 
 #include <pthread.h>
 

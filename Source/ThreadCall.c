@@ -1,4 +1,4 @@
-#include "ThreadCommunicator.h"
+#include "ThreadCall.h"
 #include <stdlib.h>
 
 struct ThreadCall
