@@ -8,29 +8,29 @@ struct ThreadCall
     size_t ParametersSize;
 };
 
-inline size_t ThreadCallQueueGetIndex(ThreadCallQueue *callQueue, size_t index)
+static inline size_t ThreadCallQueueGetIndex(const size_t offset, const size_t size, size_t index)
 {
-    return (callQueue->Offset + index) % callQueue->Size;
+    return (offset + index) % size;
 }
 
-inline char *ThreadCallQueueGetElement(ThreadCallQueue *callQueue, size_t index)
+static inline char *ThreadCallQueueGetElement(void *queue, const size_t offset, const size_t size, size_t index)
 {
-    return ((char *)callQueue->Queue) + ThreadCallQueueGetIndex(callQueue, index);
+    return ((char *)queue) + ThreadCallQueueGetIndex(offset, size, index);
 }
 
-void SafeMemcopy(const void *origin, void *dest, const size_t size)
+static void SafeMemcopy(const void *origin, void *dest, const size_t size)
 {
     char *charOrigin = (char *)origin;
     char *charDest = (char *)dest;
 
-    int direction = charOrigin < charDest;
-    int indexer = !direction + direction * -1;
+    const int direction = charOrigin > charDest;
+    const int indexer = !direction + direction * -1;
 
     charOrigin += direction * (size - 1);
     charDest += direction * (size - 1);
 
     for(size_t x = 0; x < size; x++, charOrigin += indexer, charDest += indexer)
-        charDest[x] = charOrigin[x];
+        *charDest = *charOrigin;
 }
 
 int ThreadCallQueueInit(const size_t queueStartingSize, void *queue, ThreadCallQueue *callQueueDest)
@@ -56,14 +56,14 @@ int ThreadCallQueueResize(ThreadCallQueue *callQueue, const size_t newSize)
     const size_t preLoopCount = callQueue->Count - ((callQueue->Count + callQueue->Offset) % callQueue->Size) * (callQueue->Count + callQueue->Offset > callQueue->Size);
 
     if(callQueue->Size > newSize)
-        SafeMemcopy(ThreadCallQueueGetElement(callQueue, 0), ThreadCallQueueGetElement(callQueue, newSize - preLoopCount), preLoopCount);
+        SafeMemcopy(ThreadCallQueueGetElement(callQueue->Queue, callQueue->Offset, callQueue->Size, 0), ThreadCallQueueGetElement(callQueue->Queue, 0, newSize, newSize - preLoopCount), preLoopCount);
 
     void *newQueue = realloc(callQueue->Queue, newSize);
 
     if(newQueue == NULL)
     {
         if(callQueue->Size > newSize)
-            SafeMemcopy(ThreadCallQueueGetElement(callQueue, newSize - preLoopCount), ThreadCallQueueGetElement(callQueue, 0), preLoopCount);
+            SafeMemcopy(ThreadCallQueueGetElement(callQueue->Queue, 0, newSize, newSize - preLoopCount), ThreadCallQueueGetElement(callQueue->Queue, callQueue->Offset, callQueue->Size, 0), preLoopCount);
 
         return errno;
     }
@@ -71,7 +71,7 @@ int ThreadCallQueueResize(ThreadCallQueue *callQueue, const size_t newSize)
     callQueue->Queue = newQueue;
 
     if(callQueue->Size < newSize)
-        SafeMemcopy(ThreadCallQueueGetElement(callQueue, 0), ThreadCallQueueGetElement(callQueue, newSize - preLoopCount), preLoopCount);
+        SafeMemcopy(ThreadCallQueueGetElement(callQueue->Queue, callQueue->Offset, callQueue->Size, 0), ThreadCallQueueGetElement(callQueue->Queue, 0, newSize, newSize - preLoopCount), preLoopCount);
 
     callQueue->Offset = newSize - preLoopCount;
     callQueue->Size = newSize;
@@ -96,11 +96,11 @@ int ThreadCallQueuePush(ThreadCallQueue *callQueue, void (*function)(void *param
     {
         char *charThreadCall = (char *)&threadCall;
         for(size_t x = 0; x < sizeof(threadCall); x++)
-            *ThreadCallQueueGetElement(callQueue, x) = charThreadCall[x];
+            *ThreadCallQueueGetElement(callQueue->Queue, callQueue->Offset, callQueue->Size, x + callQueue->Count) = charThreadCall[x];
     }
 
     for(size_t x = 0; x < parametersSize; x++)
-        *ThreadCallQueueGetElement(callQueue, x + sizeof(threadCall)) = *(char *)parameters;
+        *ThreadCallQueueGetElement(callQueue->Queue, callQueue->Offset, callQueue->Size, x + sizeof(threadCall) + callQueue->Count) = ((char *)parameters)[x];
 
     callQueue->Count += parametersSize + sizeof(threadCall);
 
@@ -114,13 +114,13 @@ int ThreadCallQueuePop(ThreadCallQueue *callQueue)
     {
         char *charThreadCall = (char *)&threadCall;
         for(size_t x = 0; x < sizeof(threadCall); x++)
-            charThreadCall[x] = *ThreadCallQueueGetElement(callQueue, x);
+            charThreadCall[x] = *ThreadCallQueueGetElement(callQueue->Queue, callQueue->Offset, callQueue->Size, x);
     }
 
     char parameters[threadCall.ParametersSize];
     
     for(size_t x = 0; x < threadCall.ParametersSize; x++)
-        parameters[x] = *ThreadCallQueueGetElement(callQueue, x + sizeof(threadCall));
+        parameters[x] = *ThreadCallQueueGetElement(callQueue->Queue, callQueue->Offset, callQueue->Size, x + sizeof(threadCall));
 
     callQueue->Offset = (callQueue->Offset + sizeof(threadCall) + threadCall.ParametersSize) % callQueue->Size;
     callQueue->Count -= sizeof(threadCall) + threadCall.ParametersSize;
@@ -128,4 +128,10 @@ int ThreadCallQueuePop(ThreadCallQueue *callQueue)
     threadCall.Function(parameters);
 
     return callQueue->Count <= 0;
-}  
+} 
+
+void ThreadCallQueueFree(ThreadCallQueue *callQueue)
+{
+    free(callQueue->Queue);
+    pthread_mutex_destroy(&callQueue->Mutex);
+}
