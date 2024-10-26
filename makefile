@@ -1,9 +1,10 @@
-BIN = ../../Bin
-SOURCE = Source
-TEMP = ../../Temp
+DIRECTORY := $(patsubst %/,%,$(dir $(realpath $(lastword $(MAKEFILE_LIST)))))
+BIN = Bin
+SOURCE := $(DIRECTORY)/Source
+TEMP = Temp
 
 CALLQUEUENAME = CallQueue
-CALLQUEUEDLL = $(BIN)/lib$(CALLQUEUENAME).dll
+CALLQUEUEDLL := $(BIN)/lib$(CALLQUEUENAME).dll
 
 All: $(CALLQUEUEDLL)
 
