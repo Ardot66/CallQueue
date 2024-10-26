@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "ThreadCall.h"
+#include "CallQueue.h"
 
 #define TEST(expression, onFail, ...) \
 {\
@@ -16,120 +16,55 @@
 }
 
 #define TESTEND printf("%llu out of %llu tests passed", TestsPassed, TestsCount)
-
 #define TRY(function, ...) if(result = (function)) {__VA_ARGS__}
-
-typedef struct ThreadData ThreadData;
-struct ThreadData
-{
-    ThreadCallQueue CallQueue;
-    pthread_cond_t Finished;
-    pthread_mutex_t FinishedMutex;
-    size_t Result;
-};
 
 static size_t TestsPassed = 0;
 static size_t TestsCount = 0;
 
-struct ThreadTestParameters
+struct TestFunctionParameters
 {
-    ThreadData *ThreadData;
+    size_t *Dest;
     size_t Value;
 };
 
-void ThreadTest(void *parameters)
+void TestFunction(size_t *dest, size_t value)
 {
-    struct ThreadTestParameters *thisParameters = parameters;
-    thisParameters->ThreadData->Result += thisParameters->Value;
+    *dest += value;
 }
 
-void ThreadCleanup(void *parameters)
+void G_TestFunction(void *parameters)
 {
-    int result;
-
-    ThreadData *threadData = (ThreadData *)parameters;
-    ThreadCallQueueFree(&threadData->CallQueue);
-    pthread_cond_destroy(&threadData->Finished);
-    pthread_mutex_destroy(&threadData->FinishedMutex);
-    free(threadData);
+    struct TestFunctionParameters *thisParameters = parameters;
+    TestFunction(thisParameters->Dest, thisParameters->Value);
 }
 
-void *ThreadMain(void *parameters)
+int main (int argCount, char ** argValues)
 {
-    ThreadData *threadData = (ThreadData *)parameters;
-
     int result;
-    pthread_cleanup_push(ThreadCleanup, threadData);
+    const size_t callQueueStartingCount = 64;
 
-    while(1)
+    CallQueue callQueue;
+    TRY(CallQueueInit(callQueueStartingCount, malloc(callQueueStartingCount), &callQueue), return result;)
+
+    const size_t pushAmount = 20;
+    size_t testValue = 0;
+
+    for(size_t x = 0; x < pushAmount; x++)
     {
-        pthread_testcancel();
+        struct TestFunctionParameters functionParameters;
+        functionParameters.Dest = &testValue;
+        functionParameters.Value = pushAmount;
 
-        if(threadData->CallQueue.Count <= 0)
-            continue;
-
-        TRY(pthread_mutex_lock(&threadData->CallQueue.Mutex), return NULL;)
-
-        while(ThreadCallQueuePop(&threadData->CallQueue) == EXIT_SUCCESS);
-
-        TRY(pthread_mutex_lock(&threadData->FinishedMutex), return NULL;)
-        TRY(pthread_cond_signal(&threadData->Finished), return NULL;)
-        TRY(pthread_mutex_unlock(&threadData->FinishedMutex), return NULL;)
-
-        TRY(pthread_mutex_unlock(&threadData->CallQueue.Mutex), return NULL;)
+        TRY(CallQueuePush(&callQueue, G_TestFunction, sizeof(functionParameters), &functionParameters), return result;)
     }
 
-    pthread_cleanup_pop(1);
-
-    return NULL;
-}
-
-int main(int argCount, char **argValues)
-{
-    const size_t callQueueStartingSize = 64;
-    int result;
-
-    ThreadData *threadData;
-    TRY(!(threadData = malloc(sizeof(*threadData))), return result;)
-    
-    threadData->Finished = PTHREAD_COND_INITIALIZER;
-    threadData->FinishedMutex = PTHREAD_MUTEX_INITIALIZER;
-    threadData->Result = 0;
 
     printf("Working\n");
-    TRY(pthread_mutex_init(&threadData->FinishedMutex, NULL), return result;)
-    TRY(pthread_cond_init(&threadData->Finished, NULL), return result;)
-    TRY(ThreadCallQueueInit(callQueueStartingSize, malloc(callQueueStartingSize), &threadData->CallQueue), return result;)
+    while(!CallQueuePop(&callQueue));
 
-    pthread_t thread;
-    TRY(pthread_create(&thread, NULL, ThreadMain, threadData), return result;)
+    TEST(testValue == pushAmount * pushAmount, "testValue %llu should have been %llu", testValue, pushAmount * pushAmount);
 
-    const size_t callCount = 10;
-    const size_t threadTestResult = 80085;
-
-    TRY(pthread_mutex_lock(&threadData->CallQueue.Mutex), return result;)   
-
-    for(size_t x = 0; x < callCount; x++)
-    {
-        struct ThreadTestParameters parameters;
-        parameters.ThreadData = threadData;
-        parameters.Value = threadTestResult;
-
-        TRY(ThreadCallQueuePush(&threadData->CallQueue, ThreadTest, sizeof(parameters), &parameters), return result;)
-    }
-    
-    TRY(pthread_mutex_unlock(&threadData->CallQueue.Mutex), return result;)
-
-    TRY(pthread_mutex_lock(&threadData->FinishedMutex), return result;)
-    while(threadData->Result == 0)
-        TRY(pthread_cond_wait(&threadData->Finished, &threadData->FinishedMutex), return result;)
-    TRY(pthread_mutex_unlock(&threadData->FinishedMutex), return result;)
-
-    TEST(threadTestResult * callCount == threadData->Result, "test result was %llu, should have been %llu", threadData->Result, threadTestResult * callCount);
-
-    TRY(pthread_cancel(thread), return result;)
-
-    void *threadResult;
-    TRY(pthread_join(thread, &threadResult), return result;)
     TESTEND;
+
+    return EXIT_SUCCESS;
 }
