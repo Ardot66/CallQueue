@@ -1,23 +1,21 @@
-#ifndef __THREAD_CALL__
-#define __THREAD_CALL__
+#ifndef __CALL_QUEUE__
+#define __CALL_QUEUE__
 
-#include <pthread.h>
+#include <stddef.h>
 
-typedef struct ThreadCallQueue ThreadCallQueue;
-
-struct ThreadCallQueue
+typedef struct CallQueue CallQueue;
+struct CallQueue
 {
     void *Queue;
     size_t Size;
     size_t Count;
     size_t Offset;
-    pthread_mutex_t Mutex;
 };
 
-int ThreadCallQueueInit(const size_t queueStartingSize, void *queue, ThreadCallQueue *callQueueDest);
-int ThreadCallQueueResize(ThreadCallQueue *callQueue, const size_t newSize);
-int ThreadCallQueuePush(ThreadCallQueue *callQueue, void (*function)(void *parameters), const size_t parametersSize, const void *parameters);
-int ThreadCallQueuePop(ThreadCallQueue *callQueue);
-void ThreadCallQueueFree(ThreadCallQueue *callQueue);
+int CallQueueInit(const size_t queueStartingSize, void *queue, CallQueue *callQueueDest);
+int CallQueueResize(CallQueue *callQueue, const size_t newSize);
+int CallQueuePush(CallQueue *callQueue, void (*function)(void *parameters), const size_t parametersSize, const void *parameters);
+int CallQueuePop(CallQueue *callQueue);
+void CallQueueFree(CallQueue *callQueue);
 
 #endif
