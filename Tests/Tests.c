@@ -58,8 +58,6 @@ int main (int argCount, char ** argValues)
         TRY(CallQueuePush(&callQueue, G_TestFunction, sizeof(functionParameters), &functionParameters), return result;)
     }
 
-
-    printf("Working\n");
     while(!CallQueuePop(&callQueue));
 
     TEST(testValue == pushAmount * pushAmount, "testValue %llu should have been %llu", testValue, pushAmount * pushAmount);
