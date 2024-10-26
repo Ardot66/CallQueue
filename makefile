@@ -1,27 +1,15 @@
-SHELL = cmd
-
-BIN = Bin
+BIN = ../../Bin
 SOURCE = Source
-TEMP = Temp
-TESTS = Tests
+TEMP = ../../Temp
 
 CALLQUEUENAME = CallQueue
-TESTSNAME = Tests
-
 CALLQUEUEDLL = $(BIN)/lib$(CALLQUEUENAME).dll
-TESTSEXE = $(BIN)/$(TESTSNAME).exe
 
-All: $(CALLQUEUEDLL) $(TESTSEXE)
-	$(TESTSEXE)
+All: $(CALLQUEUEDLL)
 
 $(CALLQUEUEDLL) : $(SOURCE)/$(CALLQUEUENAME).c
 	gcc -c -fPIC $(SOURCE)/$(CALLQUEUENAME).c -o $(TEMP)/$(CALLQUEUENAME).o
 	gcc -shared $(TEMP)/$(CALLQUEUENAME).o -lpthread -o $(CALLQUEUEDLL)
 
-$(TESTSEXE) : $(TESTS)/$(TESTSNAME).c
-	gcc -c -I$(SOURCE) $(TESTS)/$(TESTSNAME).c -o $(TEMP)/$(TESTSNAME).o
-	gcc -L$(BIN) $(TEMP)/$(TESTSNAME).o -l$(CALLQUEUENAME) -lpthread -o $(TESTSEXE)
-
-Clean:
-	DEL /Q $(BIN)\*.dll $(BIN)\*.exe
-	DEL /Q $(TEMP)\*.o
+Update:
+	git pull origin export
