@@ -106,6 +106,9 @@ int CallQueuePush(CallQueue *callQueue, void (*function)(void *parameters), cons
 
 int CallQueuePop(CallQueue *callQueue)
 {
+    if(callQueue->Count <= 0)
+        return 1;
+
     CallData callData;
 
     {
